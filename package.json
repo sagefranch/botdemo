@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "botbuilder": "^3.5.1"
+  }
+}
