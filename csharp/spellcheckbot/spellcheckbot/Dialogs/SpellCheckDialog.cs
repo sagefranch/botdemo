@@ -1,14 +1,16 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Web;
+using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
+using System.Web.Http;
+using System.Web.Http.Description;
+using Microsoft.Bot.Connector;
+using Newtonsoft.Json;
+using Microsoft.Bot.Builder.Dialogs;
+using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using System.Collections.ObjectModel;
-using System.Net;
-using Microsoft.Bot.Builder.Dialogs;
-using Microsoft.Bot.Connector;
 
 namespace seesharpbot.Dialogs
 {
@@ -22,11 +24,11 @@ namespace seesharpbot.Dialogs
 
         public virtual async Task MessageReceivedAsync(IDialogContext context, IAwaitable<IMessageActivity> argument)
         {
-
             var received = await argument;
             var checkedPhrase = await spellcheck(received);
-
             var suggestions = "";
+            ObservableCollection<Models.SpellCol> SearchResults = new ObservableCollection<Models.SpellCol>();
+
             for (int i = 0; i < checkedPhrase.Count(); i++)
             {
                 Models.SpellCheck suggestedCorrection = checkedPhrase.ElementAt(i);
@@ -36,33 +38,45 @@ namespace seesharpbot.Dialogs
                     spellcol = suggestedCorrection
                 });
             }
-            var message = "";
+
             if (suggestions == "" || suggestions == null)
             {
                 //if there are no suggestions, text is error-free
                 //handle next step
-                message = "You're so eloquent!";
 
             }
             else
             {
-                message = suggestions;
+                PromptDialog.Confirm(
+                      context,
+                      AfterCheckAsync,
+                      ($"Did you mean {suggestions}?"),
+                      "Didn't get that!",
+                      promptStyle: PromptStyle.None);
             }
-            await context.PostAsync($"{message}");
-            context.Wait(MessageReceivedAsync);
         }
 
-        public ObservableCollection<Models.SpellCol> SearchResults
+        public async Task AfterCheckAsync(IDialogContext context, IAwaitable<bool> argument)
         {
-            get;
-            set;
-        } = new ObservableCollection<Models.SpellCol>();
+            var confirm = await argument;
+            if (confirm)
+            {
+               await context.PostAsync("Okay! Logging that.");
+            }
+            else
+            {
+                await context.PostAsync("I'm sorry, I don't understand. Please enter your query again.");
+                
+            }
+
+            context.Wait(MessageReceivedAsync);
+        }
 
         async Task<IEnumerable<Models.SpellCheck>> spellcheck(IMessageActivity received)
         {
             List<Models.SpellCheck> spellCheckRequest = new List<Models.SpellCheck>();
             var client = new HttpClient();
-            client.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", "<YOUR API SUBSCRIPTION KEY HERE>");
+            client.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", "YOUR BING API KEY HERE");
             string text = received.Text;
             string mode = "proof";
             string mkt = "en-us";
@@ -77,11 +91,11 @@ namespace seesharpbot.Dialogs
                 {
                     offset = "Offset : " + data.flaggedTokens[i].offset,
                     token = "Wrong Word : " + data.flaggedTokens[i].token,
-                    suggestion = "Spelling Suggestion : " + data.flaggedTokens[i].suggestions[0].suggestion
+                    suggestion = data.flaggedTokens[i].suggestions[0].suggestion
                 });
             }
             return spellCheckRequest;
         }
-    }
 
+    }
 }
